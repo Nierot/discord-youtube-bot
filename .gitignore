@@ -4,8 +4,7 @@ __pycache__/
 *$py.class
 
 secrets.py
-*.webm
-*.avi
+music/
 
 # C extensions
 *.so
