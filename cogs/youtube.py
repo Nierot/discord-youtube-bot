@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 import youtube_dl
 import asyncio
 import os
+import random
 
 
 
@@ -18,7 +19,7 @@ class Youtube(commands.Cog, name='youtube'):
         self.playing = {}
 
 
-    @commands.command(name="search", aliases=['zoek', 'queue'])
+    @commands.command(name="search", aliases=['zoek'])
     async def search(self, ctx, *args):
         """
             Searches YouTube. Usage: search AMOUNT KEYWORDS
@@ -28,7 +29,7 @@ class Youtube(commands.Cog, name='youtube'):
             await ctx.send(i)
 
 
-    @commands.command(name="play")
+    @commands.command(name="play", aliases=['queue'])
     async def play(self, ctx, *args):
         try:
             await ctx.send("Searching for {}".format(" ".join(args)))
@@ -36,9 +37,10 @@ class Youtube(commands.Cog, name='youtube'):
             song_id = link[0].replace('https://www.youtube.com/watch?v=', '')
 
             song = BeautifulSoup(urllib.request.urlopen(link[0]), "lxml")
-            await self._set_playing_status(song.title.string.replace('- YouTube', ''))
+            title = song.title.string.replace('- YouTube', '')
+            song = Song(song_id, title, link)
 
-            await ctx.send("Playing {}".format(link[0]))
+            await ctx.send("Added {} to the queue. {}".format(str(song), link[0]))
             await self._download(link[0])
 
             if ctx.message.author.voice is None:
@@ -47,22 +49,35 @@ class Youtube(commands.Cog, name='youtube'):
             channel = ctx.message.author.voice.channel
             guild = ctx.message.author.guild.id
 
-            await self._join_channel(guild, channel)
-            self.playing[guild] = song_id
-            #song_file = os.path
-            await self._play_audio(guild, 'music/{}.webm'.format(song_id))
+            await self._add_to_queue(guild, song)
 
-        except discord.ClientException:
-            await ctx.send("Already playing something... please try again")
-            await self._leave_channel(self.voice_client[guild].disconnect())
-        except Exception as e:
-            await ctx.send(e)
-            print(e)
+            try:
+                await self._join_channel(guild, channel)
+                await self._play_from_queue(guild, ctx)
+            except discord.ClientException:
+                pass
+
+        except discord.ClientException as e:
+             await ctx.send(e)
+             print(e)
 
     
-    @commands.command(name="disconnect", hidden=True)
+    @commands.command(name="stop", aliased=["disconnect"])
     async def _disconnect(self, ctx):
         await self._leave_channel(ctx.message.author.guild.id)
+
+
+    @commands.command(name='queued')
+    async def queued(self, ctx):
+        await ctx.send(
+            'Current queue: \n' +
+            '\n'.join(str(x) for x in await self._get_queue(ctx.message.author.guild.id
+            )))
+
+
+    @commands.command(name="start")
+    async def start(self, ctx):
+        await self._play_from_queue(ctx.message.author.guild.id, ctx)
 
 
     async def _search(self, keyword: [], amount):
@@ -98,7 +113,10 @@ class Youtube(commands.Cog, name='youtube'):
 
 
     async def _join_channel(self, guild, channel):
-        self.voice_client[guild] = await channel.connect()
+        try:
+            self.voice_client[guild] = await channel.connect()
+        except discord.ClientException:
+            pass
 
     
     async def _leave_channel(self, guild):
@@ -114,14 +132,57 @@ class Youtube(commands.Cog, name='youtube'):
         src.read()
         return src
 
-    async def _play_audio(self, guild, audio):
-        source = await self._new_audio_source(audio)
+    async def _play_audio(self, guild, song_id):
+        source = await self._new_audio_source('music/{}.webm'.format(song_id))
         try:
             self.voice_client[guild].play(source)
         except discord.ClientException as ce:
             print("Already playing audio or not connected")
-        except Exception as e:
-            print(e)
+        # except Exception as e:
+        #     print(e)
+
+
+    async def _add_to_queue(self, guild, song):
+        queue = []
+        try:
+            queue = self.bot._queue[guild]
+        except KeyError:
+            self.bot._queue[guild] = queue
+
+        self.bot._queue[guild].append(song)
+
+    
+    async def _play_from_queue(self, guild, ctx):
+        try:
+            queue = await self._get_queue(guild)
+            await ctx.send(queue)
+            if len(queue) == 0:
+                raise KeyError
+            song = queue[random.randint(0, len(queue) - 1)]
+            await self._set_playing_status(song.title)
+            await self._play_audio(guild, song.song_id)
+        except discord.ClientException:
+            await ctx.send("There is nothing in the queue!")
+
+    
+    async def _get_queue(self, guild):
+        try:
+            queue = self.bot._queue[guild]
+            return queue
+        except KeyError:
+            return []
+
+
+class Song():
+
+    def __init__(self, song_id, title, link):
+        self.song_id = song_id
+        self.title = title
+        self.link = link
+
+
+    def __str__(self):
+        return self.title
 
 
 def setup(bot):
