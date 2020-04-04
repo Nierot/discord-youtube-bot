@@ -99,7 +99,7 @@ class Youtube(commands.Cog, name='youtube'):
         return src
 
     async def _play_audio(self, audio):
-        source = self._new_audio_source(audio)
+        source = await self._new_audio_source(audio)
         try:
             self.voice_client.play(source)
         except discord.ClientException as ce:
