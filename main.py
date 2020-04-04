@@ -12,6 +12,7 @@ class Bot:
     def __init__(self):
         self.token = secrets.TOKEN
         self.bot = commands.Bot(command_prefix=self.prefix, description=self.description)
+        self.bot._voice_clients = {}
 
     
     def load_extensions(self):

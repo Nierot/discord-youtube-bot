@@ -14,7 +14,7 @@ class Youtube(commands.Cog, name='youtube'):
 
     def __init__(self, bot):
         self.bot = bot
-        self.voice_client = {}
+        self.voice_client = self.bot._voice_clients
         self.playing = {}
 
 
@@ -55,14 +55,15 @@ class Youtube(commands.Cog, name='youtube'):
         except discord.ClientException:
             await ctx.send("Already playing something... please try again")
             await self._leave_channel(self.voice_client[guild].disconnect())
-        # except Exception as e:
-        #     await ctx.send(e)
-        #     print(e)
+        except Exception as e:
+            await ctx.send(e)
+            print(e)
 
     
     @commands.command(name="disconnect", hidden=True)
-    async def disconnect(self, ctx):
+    async def _disconnect(self, ctx):
         await self._leave_channel(ctx.message.author.guild.id)
+
 
     async def _search(self, keyword: [], amount):
         keyword = ' '.join(keyword)
